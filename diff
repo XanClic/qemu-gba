@@ -1,0 +1,47 @@
+diff --git a/default-configs/arm-softmmu.mak b/default-configs/arm-softmmu.mak
+index 27cbe3d..eb3e377 100644
+--- a/default-configs/arm-softmmu.mak
++++ b/default-configs/arm-softmmu.mak
+@@ -61,6 +61,8 @@ CONFIG_PXA2XX=y
+ CONFIG_BITBANG_I2C=y
+ CONFIG_FRAMEBUFFER=y
+ CONFIG_XILINX_SPIPS=y
++CONFIG_GBA_SOUND=y
++CONFIG_GBA_LCD=y
+ 
+ CONFIG_A9SCU=y
+ CONFIG_MARVELL_88W8618=y
+diff --git a/hw/arm/Makefile.objs b/hw/arm/Makefile.objs
+index 9e3a06f..a74fc75 100644
+--- a/hw/arm/Makefile.objs
++++ b/hw/arm/Makefile.objs
+@@ -4,4 +4,4 @@ obj-y += omap_sx1.o palm.o pic_cpu.o realview.o spitz.o stellaris.o
+ obj-y += tosa.o versatilepb.o vexpress.o xilinx_zynq.o z2.o
+ 
+ obj-y += armv7m.o exynos4210.o pxa2xx.o pxa2xx_gpio.o pxa2xx_pic.o
+-obj-y += omap1.o omap2.o strongarm.o
++obj-y += omap1.o omap2.o strongarm.o gba.o
+diff --git a/hw/audio/Makefile.objs b/hw/audio/Makefile.objs
+index 7ce85a2..c4d5f9e 100644
+--- a/hw/audio/Makefile.objs
++++ b/hw/audio/Makefile.objs
+@@ -10,6 +10,7 @@ common-obj-$(CONFIG_HDA) += intel-hda.o hda-codec.o
+ common-obj-$(CONFIG_PCSPK) += pcspk.o
+ common-obj-$(CONFIG_WM8750) += wm8750.o
+ common-obj-$(CONFIG_PL041) += pl041.o lm4549.o
++common-obj-$(CONFIG_GBA_SOUND) += gba_sound.o
+ 
+ common-obj-$(CONFIG_CS4231) += cs4231.o
+ common-obj-$(CONFIG_MARVELL_88W8618) += marvell_88w8618.o
+diff --git a/hw/display/Makefile.objs b/hw/display/Makefile.objs
+index 6e9fb3b..939c59d 100644
+--- a/hw/display/Makefile.objs
++++ b/hw/display/Makefile.objs
+@@ -6,6 +6,7 @@ common-obj-$(CONFIG_PL110) += pl110.o
+ common-obj-$(CONFIG_SSD0303) += ssd0303.o
+ common-obj-$(CONFIG_SSD0323) += ssd0323.o
+ common-obj-$(CONFIG_XEN_BACKEND) += xenfb.o
++common-obj-$(CONFIG_GBA_LCD) += gba_lcd.o
+ 
+ common-obj-$(CONFIG_VGA_PCI) += vga-pci.o
+ common-obj-$(CONFIG_VGA_ISA) += vga-isa.o
