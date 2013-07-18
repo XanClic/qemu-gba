@@ -7,31 +7,6 @@
 #include "sysemu/sysemu.h"
 
 
-#if 0
-static uint64_t gba_io_read(void *opaque, hwaddr addr, unsigned size)
-{
-    printf("gba_io_read: Unimplemented offset 0x%x (%u B req)\n",
-           (int)addr, size);
-    return 0;
-}
-
-
-static void gba_io_write(void *opaque, hwaddr addr, uint64_t data,
-                         unsigned size)
-{
-    printf("gba_io_write: Unimplemented offset 0x%x (%u B sent: %llx)\n",
-           (int)addr, size, (unsigned long long)data);
-}
-
-
-static MemoryRegionOps ioops = {
-    .read = &gba_io_read,
-    .write = &gba_io_write,
-    .endianness = DEVICE_LITTLE_ENDIAN
-};
-#endif
-
-
 typedef struct gba_pic_state {
     SysBusDevice busdev;
     MemoryRegion iomem;
@@ -234,13 +209,6 @@ static void gba_init(QEMUMachineInitArgs *args)
 
     gba_create_ram(sys_as, "gba.sram", 0x0e000000, 0x10000000,
                                        0x00010000, 0x00010000);
-
-
-    /*
-    MemoryRegion *iomem = g_new(MemoryRegion, 1);
-    memory_region_init_io(iomem, NULL, &ioops, NULL, "gba.io", 0x400);
-    memory_region_add_subregion(sys_as, 0x04000000, iomem);
-    */
 
 
     qemu_irq *cpu_pic = arm_pic_init_cpu(cpu);
