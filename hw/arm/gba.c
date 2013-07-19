@@ -13,6 +13,7 @@ typedef struct gba_pic_state {
     bool master;
     uint32_t level;
     uint32_t irq_enabled;
+    uint32_t waitcnt;
     qemu_irq parent_irq;
 } gba_pic_state;
 
@@ -43,6 +44,13 @@ static void gba_pic_set_irq(void *opaque, int irq, int level)
                __func__, size, (int)offset); \
     }
 
+#define BAD_REG_OFS_R \
+    printf("%s: Bad register offset 0x%x\n", __func__, (int)offset)
+
+#define BAD_REG_OFS_W \
+    printf("%s: Bad register offset 0x%x (tried to write 0x%0*" PRIx64 ")\n", \
+           __func__, (int)offset, size * 2, value)
+
 static uint64_t gba_pic_read(void *opaque, hwaddr offset, unsigned size)
 {
     gba_pic_state *s = (gba_pic_state *)opaque;
@@ -58,12 +66,15 @@ static uint64_t gba_pic_read(void *opaque, hwaddr offset, unsigned size)
         case 2: // IF
             CHECK_WIDTH_MAX(2);
             return s->level;
+        case 4: // WAITCNT
+            CHECK_WIDTH_MAX(4);
+            return s->waitcnt;
         case 8: // IME
             CHECK_WIDTH_MAX(4);
             return !s->master;
 
         default:
-            printf("gba_pic_read: Bad register offset 0x%x\n", (int)offset);
+            BAD_REG_OFS_R;
             return 0;
     }
 }
@@ -88,13 +99,18 @@ static void gba_pic_write(void *opaque, hwaddr offset, uint64_t value,
             CHECK_WIDTH_MAX(2);
             s->level &= ~value;
             break;
+
+        case 4: // WAITCNT
+            CHECK_WIDTH_MAX(4);
+            s->waitcnt = value & 0x7fff;
+            break;
         case 8: // IME
             CHECK_WIDTH_MAX(4);
             s->master = !(value & 1);
             break;
 
         default:
-            printf("gba_pic_write: Bad register offset 0x%x\n", (int)offset);
+            BAD_REG_OFS_W;
             return;
     }
 
@@ -118,9 +134,85 @@ static int gba_pic_init(SysBusDevice *dev)
                           0x00000100);
     sysbus_init_mmio(dev, &s->iomem);
 
-    s->master      = false;
-    s->level       = 0;
-    s->irq_enabled = 0;
+    return 0;
+}
+
+
+typedef struct gba_dma_state {
+    SysBusDevice busdev;
+    MemoryRegion iomem;
+    qemu_irq irq[4];
+} gba_dma_state;
+
+
+static uint64_t gba_dma_read(void *opaque, hwaddr offset, unsigned size)
+{
+    BAD_REG_OFS_R;
+    return 0;
+}
+
+static void gba_dma_write(void *opaque, hwaddr offset, uint64_t value,
+                          unsigned size)
+{
+    BAD_REG_OFS_W;
+}
+
+
+static const MemoryRegionOps gba_dma_ops = {
+    .read = gba_dma_read,
+    .write = gba_dma_write,
+    .endianness = DEVICE_NATIVE_ENDIAN,
+};
+
+static int gba_dma_init(SysBusDevice *dev)
+{
+    gba_dma_state *s = FROM_SYSBUS(gba_dma_state, dev);
+
+    memory_region_init_io(&s->iomem, OBJECT(s), &gba_dma_ops, s, "gba-dma",
+                          0x00000050);
+    sysbus_init_mmio(dev, &s->iomem);
+
+    sysbus_init_irq(dev, &s->irq[0]);
+    sysbus_init_irq(dev, &s->irq[1]);
+    sysbus_init_irq(dev, &s->irq[2]);
+    sysbus_init_irq(dev, &s->irq[3]);
+
+    return 0;
+}
+
+
+typedef struct gba_ctrl_state {
+    SysBusDevice busdev;
+    MemoryRegion iomem;
+} gba_ctrl_state;
+
+
+static uint64_t gba_ctrl_read(void *opaque, hwaddr offset, unsigned size)
+{
+    BAD_REG_OFS_R;
+    return 0;
+}
+
+static void gba_ctrl_write(void *opaque, hwaddr offset, uint64_t value,
+                           unsigned size)
+{
+    BAD_REG_OFS_W;
+}
+
+
+static const MemoryRegionOps gba_ctrl_ops = {
+    .read = gba_ctrl_read,
+    .write = gba_ctrl_write,
+    .endianness = DEVICE_NATIVE_ENDIAN,
+};
+
+static int gba_ctrl_init(SysBusDevice *dev)
+{
+    gba_ctrl_state *s = FROM_SYSBUS(gba_ctrl_state, dev);
+
+    memory_region_init_io(&s->iomem, OBJECT(s), &gba_ctrl_ops, s, "gba-ctrl",
+                          0x00000d00);
+    sysbus_init_mmio(dev, &s->iomem);
 
     return 0;
 }
@@ -214,15 +306,24 @@ static void gba_init(QEMUMachineInitArgs *args)
     qemu_irq *cpu_pic = arm_pic_init_cpu(cpu);
     qemu_irq pic[16];
 
-    DeviceState *dev = sysbus_create_simple("gba_pic", 0x04000200, cpu_pic[ARM_PIC_CPU_IRQ]);
+    DeviceState *dev = sysbus_create_simple("gba_pic", 0x04000200,
+                                            cpu_pic[ARM_PIC_CPU_IRQ]);
 
     int i;
     for (i = 0; i < 16; i++) {
         pic[i] = qdev_get_gpio_in(dev, i);
     }
 
-    sysbus_create_varargs("gba_sound", 0x04000060, NULL);
-    sysbus_create_varargs("gba_lcd", 0x04000000, pic[0], pic[1], pic[2], NULL);
+    sysbus_create_varargs("gba_lcd",    0x04000000,
+                          pic[0], pic[1], pic[2], NULL);
+    sysbus_create_varargs("gba_sound",  0x04000060, NULL);
+    sysbus_create_varargs("gba_dma",    0x040000b0,
+                          pic[8], pic[9], pic[10], pic[11], NULL);
+    sysbus_create_varargs("gba_timer",  0x04000100,
+                          pic[3], pic[4], pic[5], pic[6], NULL);
+    sysbus_create_simple ("gba_serial", 0x04000120, pic[7]);
+    sysbus_create_simple ("gba_input",  0x04000130, pic[12]);
+    sysbus_create_varargs("gba_ctrl",   0x04000300, NULL);
 
 
     if (load_image_targphys(bios_name, 0x00000000, 0x00004000) < 0) {
@@ -260,16 +361,42 @@ static void gba_pic_class_init(ObjectClass *klass, void *data)
     sdc->init = gba_pic_init;
 }
 
+static void gba_dma_class_init(ObjectClass *klass, void *data)
+{
+    SysBusDeviceClass *sdc = SYS_BUS_DEVICE_CLASS(klass);
+
+    sdc->init = gba_dma_init;
+}
+
+static void gba_ctrl_class_init(ObjectClass *klass, void *Data)
+{
+    SysBusDeviceClass *sdc = SYS_BUS_DEVICE_CLASS(klass);
+
+    sdc->init = gba_ctrl_init;
+}
+
 static const TypeInfo gba_pic_info = {
-    .name          = "gba_pic",
-    .parent        = TYPE_SYS_BUS_DEVICE,
-    .instance_size = sizeof(gba_pic_state),
-    .class_init    = gba_pic_class_init,
+    .name           = "gba_pic",
+    .parent         = TYPE_SYS_BUS_DEVICE,
+    .instance_size  = sizeof(gba_pic_state),
+    .class_init     = gba_pic_class_init,
+}, gba_dma_info = {
+    .name           = "gba_dma",
+    .parent         = TYPE_SYS_BUS_DEVICE,
+    .instance_size  = sizeof(gba_dma_state),
+    .class_init     = gba_dma_class_init,
+}, gba_ctrl_info = {
+    .name           = "gba_ctrl",
+    .parent         = TYPE_SYS_BUS_DEVICE,
+    .instance_size  = sizeof(gba_ctrl_state),
+    .class_init     = gba_ctrl_class_init,
 };
 
 static void gba_register_types(void)
 {
     type_register_static(&gba_pic_info);
+    type_register_static(&gba_dma_info);
+    type_register_static(&gba_ctrl_info);
 }
 
 type_init(gba_register_types);

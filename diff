@@ -1,13 +1,16 @@
 diff --git a/default-configs/arm-softmmu.mak b/default-configs/arm-softmmu.mak
-index 27cbe3d..eb3e377 100644
+index 27cbe3d..5fd7416 100644
 --- a/default-configs/arm-softmmu.mak
 +++ b/default-configs/arm-softmmu.mak
-@@ -61,6 +61,8 @@ CONFIG_PXA2XX=y
+@@ -61,6 +61,11 @@ CONFIG_PXA2XX=y
  CONFIG_BITBANG_I2C=y
  CONFIG_FRAMEBUFFER=y
  CONFIG_XILINX_SPIPS=y
 +CONFIG_GBA_SOUND=y
 +CONFIG_GBA_LCD=y
++CONFIG_GBA_TIMER=y
++CONFIG_GBA_SERIAL=y
++CONFIG_GBA_INPUT=y
  
  CONFIG_A9SCU=y
  CONFIG_MARVELL_88W8618=y
@@ -33,6 +36,18 @@ index 7ce85a2..c4d5f9e 100644
  
  common-obj-$(CONFIG_CS4231) += cs4231.o
  common-obj-$(CONFIG_MARVELL_88W8618) += marvell_88w8618.o
+diff --git a/hw/char/Makefile.objs b/hw/char/Makefile.objs
+index f8f3dbc..2da69dd 100644
+--- a/hw/char/Makefile.objs
++++ b/hw/char/Makefile.objs
+@@ -8,6 +8,7 @@ common-obj-$(CONFIG_VIRTIO) += virtio-console.o
+ common-obj-$(CONFIG_XILINX) += xilinx_uartlite.o
+ common-obj-$(CONFIG_XEN_BACKEND) += xen_console.o
+ common-obj-$(CONFIG_CADENCE) += cadence_uart.o
++common-obj-$(CONFIG_GBA_SERIAL) += gba_serial.o
+ 
+ obj-$(CONFIG_EXYNOS4) += exynos4210_uart.o
+ obj-$(CONFIG_COLDFIRE) += mcf_uart.o
 diff --git a/hw/display/Makefile.objs b/hw/display/Makefile.objs
 index 6e9fb3b..939c59d 100644
 --- a/hw/display/Makefile.objs
@@ -45,3 +60,27 @@ index 6e9fb3b..939c59d 100644
  
  common-obj-$(CONFIG_VGA_PCI) += vga-pci.o
  common-obj-$(CONFIG_VGA_ISA) += vga-isa.o
+diff --git a/hw/input/Makefile.objs b/hw/input/Makefile.objs
+index e8c80b9..bab100f 100644
+--- a/hw/input/Makefile.objs
++++ b/hw/input/Makefile.objs
+@@ -7,6 +7,7 @@ common-obj-y += ps2.o
+ common-obj-$(CONFIG_STELLARIS_INPUT) += stellaris_input.o
+ common-obj-$(CONFIG_TSC2005) += tsc2005.o
+ common-obj-$(CONFIG_VMMOUSE) += vmmouse.o
++common-obj-$(CONFIG_GBA_INPUT) += gba_input.o
+ 
+ obj-$(CONFIG_MILKYMIST) += milkymist-softusb.o
+ obj-$(CONFIG_PXA2XX) += pxa2xx_keypad.o
+diff --git a/hw/timer/Makefile.objs b/hw/timer/Makefile.objs
+index 32b5c1a..f68b8a1 100644
+--- a/hw/timer/Makefile.objs
++++ b/hw/timer/Makefile.objs
+@@ -15,6 +15,7 @@ common-obj-$(CONFIG_IMX) += imx_epit.o
+ common-obj-$(CONFIG_IMX) += imx_gpt.o
+ common-obj-$(CONFIG_LM32) += lm32_timer.o
+ common-obj-$(CONFIG_MILKYMIST) += milkymist-sysctl.o
++common-obj-$(CONFIG_GBA_TIMER) += gba_timer.o
+ 
+ obj-$(CONFIG_EXYNOS4) += exynos4210_mct.o
+ obj-$(CONFIG_EXYNOS4) += exynos4210_pwm.o
