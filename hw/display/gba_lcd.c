@@ -1,4 +1,3 @@
-#include "framebuffer.h"
 #include "hw/sysbus.h"
 #include "ui/console.h"
 #include "ui/pixel_ops.h"
@@ -14,8 +13,49 @@ typedef struct gba_lcd_state {
     bool hblank;
     int ly, lyc;
     bool irq_vb_en, irq_hb_en, irq_vm_en;
+    int bg_mode;
+    int bgm_45_frame;
+    bool hb_intvl_free;
+    bool obj_vram_map_2d;
+    bool forced_blank;
+    bool display_bg[4], display_obj, display_wnd[2], display_ownd;
     qemu_irq irq_vb, irq_hb, irq_vm;
 } gba_lcd_state;
+
+
+static void gba_lcd_update_current_line(gba_lcd_state *s)
+{
+    if (s->ly >= 160) {
+        return;
+    }
+
+    DisplaySurface *sfc = qemu_console_surface(s->con);
+
+    if (is_buffer_shared(sfc)) {
+        return;
+    }
+
+    if ((surface_bits_per_pixel(sfc) != 32) || is_surface_bgr(sfc)) {
+        fprintf(stderr, "Unknown surface format (%i bpp %s)\n",
+                surface_bits_per_pixel(sfc),
+                is_surface_bgr(sfc) ? "BGR" : "RGB");
+        exit(1);
+    }
+
+    size_t stride = surface_stride(sfc);
+    uint8_t *data = (uint8_t *)surface_data(sfc) + stride * s->ly;
+
+    if (s->forced_blank) {
+        memset(data, 255, surface_stride(sfc));
+    } else {
+        memset(data, 0, surface_stride(sfc));
+    }
+
+
+    if (s->ly == 159) {
+        dpy_gfx_update(s->con, 0, 0, 240, 160);
+    }
+}
 
 
 static void gba_lcd_update_display(void *opaque)
@@ -47,6 +87,22 @@ static uint64_t gba_lcd_read(void *opaque, hwaddr offset, unsigned size)
 
     switch (offset)
     {
+        case 0x00: // DISPCNT
+            CHECK_WIDTH_MAX(4);
+            return s->bg_mode
+                 | (s->bgm_45_frame     <<  4)
+                 | (s->hb_intvl_free    <<  5)
+                 | (!s->obj_vram_map_2d <<  6)
+                 | (s->forced_blank     <<  7)
+                 | (s->display_bg[0]    <<  8)
+                 | (s->display_bg[1]    <<  9)
+                 | (s->display_bg[2]    << 10)
+                 | (s->display_bg[3]    << 11)
+                 | (s->display_obj      << 12)
+                 | (s->display_wnd[0]   << 13)
+                 | (s->display_wnd[1]   << 14)
+                 | (s->display_ownd     << 15);
+
         case 0x04: // DISPSTAT
             CHECK_WIDTH_MAX(2);
             return ((int)((s->ly >= 160) && (s->ly <= 226))) // V-Blank
@@ -74,6 +130,23 @@ static void gba_lcd_write(void *opaque, hwaddr offset, uint64_t value,
 
     switch (offset)
     {
+        case 0x00: // DISPCNT
+            CHECK_WIDTH_MAX(4);
+            s->bg_mode          =    value        & 7;
+            s->bgm_45_frame     =   (value >>  4) & 1;
+            s->hb_intvl_free    =   (value >>  5) & 1;
+            s->obj_vram_map_2d  = !((value >>  6) & 1);
+            s->forced_blank     =   (value >>  7) & 1;
+            s->display_bg[0]    =   (value >>  8) & 1;
+            s->display_bg[1]    =   (value >>  9) & 1;
+            s->display_bg[2]    =   (value >> 10) & 1;
+            s->display_bg[3]    =   (value >> 11) & 1;
+            s->display_obj      =   (value >> 12) & 1;
+            s->display_wnd[0]   =   (value >> 13) & 1;
+            s->display_wnd[1]   =   (value >> 14) & 1;
+            s->display_ownd     =   (value >> 15) & 1;
+            break;
+
         case 0x04: // DISPSTAT
             CHECK_WIDTH_MAX(4);
             s->irq_vb_en = (value >> 3) & 1;
@@ -116,8 +189,20 @@ static void gba_lcd_timer(void *opaque)
     s->hblank = !s->hblank;
     qemu_set_irq(s->irq_hb, s->irq_hb_en && s->hblank);
 
-    qemu_mod_timer_ns(s->timer, qemu_get_clock_ns(vm_clock) +
-                      (s->hblank ? 16212 : 57221));
+    if (!s->hblank) {
+        gba_lcd_update_current_line(s);
+    }
+
+
+    static uint64_t next_call = 0;
+
+    if (!next_call) {
+        next_call = qemu_get_clock_ns(vm_clock);
+    }
+
+    next_call += (s->hblank ? 16212 : 57221);
+
+    qemu_mod_timer_ns(s->timer, next_call);
 }
 
 
@@ -136,6 +221,7 @@ static int gba_lcd_init(SysBusDevice *dev)
 {
     gba_lcd_state *s = FROM_SYSBUS(gba_lcd_state, dev);
 
+
     memory_region_init_io(&s->iomem, OBJECT(s), &gba_lcd_ops, s, "gba_lcd",
                           0x00000060);
     sysbus_init_mmio(dev, &s->iomem);
@@ -146,12 +232,6 @@ static int gba_lcd_init(SysBusDevice *dev)
 
     s->con = graphic_console_init(DEVICE(dev), &gba_lcd_gfx_ops, s);
     qemu_console_resize(s->con, 240, 160);
-
-    s->invalidate = false;
-    s->hblank = false;
-    s->ly = s->lyc = 0;
-
-    s->irq_vb_en = s->irq_hb_en = s->irq_vm_en = false;
 
     s->timer = qemu_new_timer_ns(vm_clock, gba_lcd_timer, s);
     gba_lcd_timer(s);
