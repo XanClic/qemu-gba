@@ -46,7 +46,7 @@ static int gba_sound_init(SysBusDevice *dev)
 {
     gba_sound_state *s = FROM_SYSBUS(gba_sound_state, dev);
 
-    memory_region_init_io(&s->iomem, OBJECT(s), &gba_sound_ops, s, "gba_sound",
+    memory_region_init_io(&s->iomem, OBJECT(s), &gba_sound_ops, s, "gba-sound",
                           0x00000050);
     sysbus_init_mmio(dev, &s->iomem);
 

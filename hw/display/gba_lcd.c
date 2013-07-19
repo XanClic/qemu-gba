@@ -166,7 +166,8 @@ static void gba_lcd_write(void *opaque, hwaddr offset, uint64_t value,
             break;
 
         default:
-            printf("gba_lcd_write: Bad register offset 0x%x\n", (int)offset);
+            printf("gba_lcd_write: Bad register offset 0x%x (tried to write "
+                   "0x%0*" PRIx64 ")\n", (int)offset, size * 2, value);
             return;
     }
 }
@@ -221,8 +222,7 @@ static int gba_lcd_init(SysBusDevice *dev)
 {
     gba_lcd_state *s = FROM_SYSBUS(gba_lcd_state, dev);
 
-
-    memory_region_init_io(&s->iomem, OBJECT(s), &gba_lcd_ops, s, "gba_lcd",
+    memory_region_init_io(&s->iomem, OBJECT(s), &gba_lcd_ops, s, "gba-lcd",
                           0x00000060);
     sysbus_init_mmio(dev, &s->iomem);
 
